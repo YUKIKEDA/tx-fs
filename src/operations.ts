@@ -402,7 +402,6 @@ export async function cp(
   }
 
   // Lock source (for reading) and destination parent (for writing)
-  const sourceParentDir = path.dirname(sourceAbsolutePath);
   const destParentDir = path.dirname(destAbsolutePath);
   
   // Acquire shared lock on source
