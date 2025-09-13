@@ -97,8 +97,9 @@ export async function writeFile(
 export async function readFile(
   appContext: AppContext,
   txState: TxState,
-  filePath: string
-): Promise<Buffer> {
+  filePath: string,
+  encoding?: BufferEncoding
+): Promise<string | Buffer> {
   const { baseDir, lockManager } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, filePath);
   const relativePath = path.relative(baseDir, absolutePath);
@@ -116,11 +117,11 @@ export async function readFile(
   const stagingPath = path.join(txState.stagingDir, relativePath);
   try {
     await fs.access(stagingPath);
-    return fs.readFile(stagingPath);
+    return encoding ? fs.readFile(stagingPath, encoding) : fs.readFile(stagingPath);
   } catch (e: any) {
     if (e.code === 'ENOENT') {
       // Read from actual file if not in staging
-      return fs.readFile(absolutePath);
+      return encoding ? fs.readFile(absolutePath, encoding) : fs.readFile(absolutePath);
     }
     throw e;
   }
@@ -261,6 +262,8 @@ export async function mkdir(
 
   // Create directory in staging area
   const stagingPath = path.join(txState.stagingDir, relativePath);
+  // Always ensure parent directories exist in staging
+  await fs.mkdir(path.dirname(stagingPath), { recursive: true });
   await fs.mkdir(stagingPath, { recursive: options?.recursive ?? false });
 
   // Journaling
@@ -298,6 +301,42 @@ export async function exists(
   
   if (isMarkedForDeletion) {
     return false; // Treat as non-existent since it's marked for deletion
+  }
+
+  // Check if file was renamed FROM this path (source of rename)
+  const wasRenamedFrom = txState.journal.operations.some(
+    op => op.op === 'RENAME' && op.from === relativePath
+  );
+  
+  if (wasRenamedFrom) {
+    return false; // Treat as non-existent since it was renamed away
+  }
+
+  // Check if file was renamed TO this path (destination of rename)
+  const wasRenamedTo = txState.journal.operations.find(
+    op => op.op === 'RENAME' && op.to === relativePath
+  );
+  
+  if (wasRenamedTo) {
+    return true; // Treat as existing since it was renamed here
+  }
+
+  // Check if file was created via WRITE operation
+  const wasWritten = txState.journal.operations.some(
+    op => op.op === 'WRITE' && op.path === relativePath
+  );
+  
+  if (wasWritten) {
+    return true; // Treat as existing since it was written
+  }
+
+  // Check if file was created via CP operation
+  const wasCopiedTo = txState.journal.operations.find(
+    op => op.op === 'CP' && op.to === relativePath
+  );
+  
+  if (wasCopiedTo) {
+    return true; // Treat as existing since it was copied here
   }
 
   // First check staging area (newly created files)
@@ -349,20 +388,42 @@ export async function rename(
     }
   }
 
-  // Check if source exists
-  const sourceExists = await fileExists(oldAbsolutePath);
+  // Check if source exists (using transaction-aware exists)
+  const sourceExists = await exists(appContext, txState, oldPath);
   if (!sourceExists) {
     throw new Error(`Source path does not exist: ${oldPath}`);
   }
 
   // Create snapshot for rollback if the target already exists
-  const targetExists = await fileExists(newAbsolutePath);
+  const targetExists = await exists(appContext, txState, newPath);
   if (targetExists) {
     const snapshotPath = path.join(txState.stagingDir, '_snapshots', newRelativePath);
     await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
+    
+    // Always snapshot the ORIGINAL file, not staging version
     await fs.cp(newAbsolutePath, snapshotPath, { recursive: true });
     txState.journal.snapshots[newRelativePath] = snapshotPath;
   }
+
+  // Copy source to staging area under new name
+  const newStagingPath = path.join(txState.stagingDir, newRelativePath);
+  await fs.mkdir(path.dirname(newStagingPath), { recursive: true });
+  
+  // Check if source is in staging area first
+  const oldStagingPath = path.join(txState.stagingDir, oldRelativePath);
+  let actualSourcePath = oldAbsolutePath;
+  
+  try {
+    await fs.access(oldStagingPath);
+    actualSourcePath = oldStagingPath; // Use staging version if it exists
+  } catch (e: any) {
+    if (e.code !== 'ENOENT') {
+      throw e;
+    }
+    // Use original file if not in staging
+  }
+  
+  await fs.cp(actualSourcePath, newStagingPath, { recursive: true });
 
   // Journaling
   txState.journal.operations.push({ 
@@ -395,8 +456,8 @@ export async function cp(
   const sourceRelativePath = path.relative(baseDir, sourceAbsolutePath);
   const destRelativePath = path.relative(baseDir, destAbsolutePath);
 
-  // Check if source exists FIRST (before any locking)
-  const sourceExists = await fileExists(sourceAbsolutePath);
+  // Check if source exists FIRST (before any locking, using transaction-aware exists)
+  const sourceExists = await exists(appContext, txState, sourcePath);
   if (!sourceExists) {
     throw new Error(`Source path does not exist: ${sourcePath}`);
   }
@@ -422,12 +483,37 @@ export async function cp(
     }
   }
 
+  // Create snapshot for rollback if the target already exists (BEFORE modifying it)
+  const targetExists = await exists(appContext, txState, destPath);
+  if (targetExists) {
+    const snapshotPath = path.join(txState.stagingDir, '_snapshots', destRelativePath);
+    await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
+    
+    // Always snapshot the ORIGINAL file, not staging version
+    await fs.cp(destAbsolutePath, snapshotPath, { recursive: true });
+    txState.journal.snapshots[destRelativePath] = snapshotPath;
+  }
+
   // Copy to staging area
   const stagingDestPath = path.join(txState.stagingDir, destRelativePath);
   await fs.mkdir(path.dirname(stagingDestPath), { recursive: true });
   
+  // Check if source is in staging area first
+  const stagingSourcePath = path.join(txState.stagingDir, sourceRelativePath);
+  let actualSourcePath = sourceAbsolutePath;
+  
   try {
-    await fs.cp(sourceAbsolutePath, stagingDestPath, { 
+    await fs.access(stagingSourcePath);
+    actualSourcePath = stagingSourcePath; // Use staging version if it exists
+  } catch (e: any) {
+    if (e.code !== 'ENOENT') {
+      throw e;
+    }
+    // Use original file if not in staging
+  }
+  
+  try {
+    await fs.cp(actualSourcePath, stagingDestPath, { 
       recursive: options?.recursive ?? true 
     });
   } catch (error: any) {
@@ -435,15 +521,6 @@ export async function cp(
       throw new Error(`Source path does not exist: ${sourcePath}`);
     }
     throw error;
-  }
-
-  // Create snapshot for rollback if the target already exists
-  const targetExists = await fileExists(destAbsolutePath);
-  if (targetExists) {
-    const snapshotPath = path.join(txState.stagingDir, '_snapshots', destRelativePath);
-    await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
-    await fs.cp(destAbsolutePath, snapshotPath, { recursive: true });
-    txState.journal.snapshots[destRelativePath] = snapshotPath;
   }
 
   // Journaling

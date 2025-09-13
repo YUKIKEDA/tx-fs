@@ -60,10 +60,47 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
       switch (op.op) {
         case 'WRITE': {
           const dest = finalDestPath(op.path);
+          const source = sourceStagingPath(op.path);
+          
+          // Verify staging file exists before attempting rename
+          // Use retry logic for Windows file system timing issues  
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            try {
+              await fs.access(source);
+              break;
+            } catch (e: any) {
+              if (e.code === 'ENOENT' && attempt < 5) {
+                // Wait progressively longer for file system to settle (Windows timing issue)
+                await new Promise(resolve => setTimeout(resolve, 50 * Math.pow(2, attempt - 1)));
+                continue;
+              }
+              if (e.code === 'ENOENT') {
+                // Add more detailed error information for debugging
+                try {
+                  const stagingDirContents = await fs.readdir(txState.stagingDir);
+                  throw new Error(`Staging file not found for commit: ${op.path}. Staging dir contains: [${stagingDirContents.join(', ')}]. This indicates a bug in the staging logic or filesystem timing issue.`);
+                } catch (dirError) {
+                  throw new Error(`Staging file not found for commit: ${op.path}. Could not read staging directory: ${dirError}. This indicates a bug in the staging logic or filesystem timing issue.`);
+                }
+              }
+              throw e;
+            }
+          }
+          
           // Create parent directory in case it doesn't exist
           await fs.mkdir(path.dirname(dest), { recursive: true });
-          // rename is an atomic operation
-          await fs.rename(sourceStagingPath(op.path), dest);
+          // Use copy+remove instead of rename to handle Windows EPERM issues
+          try {
+            await fs.rename(source, dest);
+          } catch (e: any) {
+            if (e.code === 'EPERM' || e.code === 'EXDEV') {
+              // Fallback to copy+remove for permission/cross-device issues
+              await fs.cp(source, dest, { recursive: true });
+              await fs.rm(source, { recursive: true, force: true });
+            } else {
+              throw e;
+            }
+          }
           break;
         }
         case 'RM': {
@@ -84,17 +121,64 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
           break;
         }
         case 'RENAME': {
-          const fromPath = finalDestPath(op.from);
-          const toPath = finalDestPath(op.to);
-          await fs.mkdir(path.dirname(toPath), { recursive: true });
-          await fs.rename(fromPath, toPath);
+          // For rename, we copy from staging to destination and remove original
+          const stagingToPath = sourceStagingPath(op.to);
+          const finalToPath = finalDestPath(op.to);
+          const finalFromPath = finalDestPath(op.from);
+          
+          // Verify staging file exists
+          try {
+            await fs.access(stagingToPath);
+          } catch (e: any) {
+            if (e.code === 'ENOENT') {
+              throw new Error(`Staging file not found for rename commit: ${op.to}. This indicates a bug in the staging logic.`);
+            }
+            throw e;
+          }
+          
+          await fs.mkdir(path.dirname(finalToPath), { recursive: true });
+          // Use copy+remove instead of rename to handle Windows EPERM issues
+          try {
+            await fs.rename(stagingToPath, finalToPath);
+          } catch (e: any) {
+            if (e.code === 'EPERM' || e.code === 'EXDEV') {
+              // Fallback to copy+remove for permission/cross-device issues
+              await fs.cp(stagingToPath, finalToPath, { recursive: true });
+              await fs.rm(stagingToPath, { recursive: true, force: true });
+            } else {
+              throw e;
+            }
+          }
+          // Remove original file/dir if it exists
+          try {
+            await fs.rm(finalFromPath, { recursive: true, force: true });
+          } catch (e: any) {
+            // Ignore if source doesn't exist (might have been created in staging only)
+            if (e.code !== 'ENOENT') {
+              throw e;
+            }
+          }
           break;
         }
         case 'CP': {
-          const fromPath = finalDestPath(op.from);
-          const toPath = finalDestPath(op.to);
-          await fs.mkdir(path.dirname(toPath), { recursive: true });
-          await fs.cp(fromPath, toPath, { recursive: true });
+          // For copy, we move from staging to destination
+          const stagingToPath = sourceStagingPath(op.to);
+          const finalToPath = finalDestPath(op.to);
+          
+          // Verify staging file exists
+          try {
+            await fs.access(stagingToPath);
+          } catch (e: any) {
+            if (e.code === 'ENOENT') {
+              throw new Error(`Staging file not found for copy commit: ${op.to}. This indicates a bug in the staging logic.`);
+            }
+            throw e;
+          }
+          
+          await fs.mkdir(path.dirname(finalToPath), { recursive: true });
+          // Always use copy for CP operations to avoid interfering with other staging files
+          // The staging cleanup happens later in the cleanup phase
+          await fs.cp(stagingToPath, finalToPath, { recursive: true });
           break;
         }
       }

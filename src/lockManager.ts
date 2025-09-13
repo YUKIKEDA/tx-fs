@@ -139,8 +139,8 @@ export function createLockManager(options: LockManagerOptions): LockManager {
       const lockFilePath = getLockFilePath(resourcePath);
       await lockfile.unlock(resourcePath, { lockfilePath: lockFilePath });
     } catch (e: any) {
-      // No problem if lock file doesn't exist
-      if (e.code !== 'ENOENT') {
+      // No problem if lock file doesn't exist or is compromised during cleanup
+      if (e.code !== 'ENOENT' && e.code !== 'ECOMPROMISED') {
         console.warn(`Failed to release lock on "${resourcePath}":`, e.message);
       }
     }

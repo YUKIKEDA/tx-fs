@@ -251,7 +251,7 @@ export function createTxFileManager(options: TxFileManagerOptions): TxFileManage
     
     // Create transaction handle
     const txHandle: TxHandle = {
-      readFile: (filePath: string) => readFile(appContext, txState, filePath),
+      readFile: (filePath: string, encoding?: BufferEncoding) => readFile(appContext, txState, filePath, encoding),
       writeFile: (filePath: string, data: Buffer | string) => writeFile(appContext, txState, filePath, data),
       appendFile: (filePath: string, data: Buffer | string) => appendFile(appContext, txState, filePath, data),
       rm: (targetPath: string, options?: { recursive?: boolean }) => rm(appContext, txState, targetPath, options),

@@ -27,6 +27,31 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
   };
 
   /**
+   * Retry function for file operations with exponential backoff
+   * Primarily used for handling Windows permission errors from antivirus/Windows Defender
+   */
+  const retryWithBackoff = async <T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelayMs: number = 100
+  ): Promise<T> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        if (error.code === 'EPERM' && attempt < maxRetries) {
+          // Exponential backoff for permission errors (common on Windows due to antivirus)
+          const delay = baseDelayMs * Math.pow(2, attempt - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('Max retries exceeded');
+  };
+
+  /**
    * Writes a journal to a file
    * @param journal Journal object to write
    * @param opts.sync If true, attempts synchronous write like fs.sync.writeFile (Node.js fs/promises doesn't have full sync, so uses fd.sync() as substitute)
@@ -38,34 +63,22 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
     // Ensure journal directory exists
     await fs.mkdir(options.journalDir, { recursive: true });
 
-    if (opts?.sync) {
-      // Important writes that need to be crash-safe, such as transitions to PREPARED state
-      let fileHandle;
-      try {
-        fileHandle = await fs.open(journalPath, 'w');
-        await fileHandle.writeFile(data);
-        await fileHandle.sync(); // Ensure synchronization to disk
-      } catch (error: any) {
-        // Provide more detailed error information for EPERM errors
-        if (error.code === 'EPERM') {
-          throw new Error(`Failed to write journal file due to permission error: ${journalPath}. This might be caused by concurrent directory cleanup or antivirus interference.`);
+    await retryWithBackoff(async () => {
+      if (opts?.sync) {
+        // Important writes that need to be crash-safe, such as transitions to PREPARED state
+        let fileHandle;
+        try {
+          fileHandle = await fs.open(journalPath, 'w');
+          await fileHandle.writeFile(data);
+          await fileHandle.sync(); // Ensure synchronization to disk
+        } finally {
+          await fileHandle?.close();
         }
-        throw error;
-      } finally {
-        await fileHandle?.close();
-      }
-    } else {
-      // Normal asynchronous write
-      try {
+      } else {
+        // Normal asynchronous write
         await fs.writeFile(journalPath, data);
-      } catch (error: any) {
-        // Provide more detailed error information for EPERM errors
-        if (error.code === 'EPERM') {
-          throw new Error(`Failed to write journal file due to permission error: ${journalPath}. This might be caused by concurrent directory cleanup or antivirus interference.`);
-        }
-        throw error;
       }
-    }
+    });
   };
   
   /**
@@ -76,11 +89,18 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
   const read = async (txId: string): Promise<Journal | null> => {
     const journalPath = getJournalPath(txId);
     try {
-      const data = await fs.readFile(journalPath, 'utf-8');
+      const data = await retryWithBackoff(async () => {
+        return await fs.readFile(journalPath, 'utf-8');
+      });
       return JSON.parse(data) as Journal;
     } catch (e: any) {
       if (e.code === 'ENOENT') {
         return null; // Return null if file doesn't exist
+      }
+      if (e instanceof SyntaxError) {
+        // Handle corrupted JSON files gracefully
+        console.error(`Error during recovery process: ${e}`);
+        return null; // Treat corrupted journals as non-existent
       }
       throw e; // Re-throw other errors
     }
@@ -93,7 +113,9 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
   const del = async (txId: string): Promise<void> => {
     const journalPath = getJournalPath(txId);
     try {
-      await fs.rm(journalPath, { force: true }); // force: true prevents errors even if file doesn't exist
+      await retryWithBackoff(async () => {
+        await fs.rm(journalPath, { force: true }); // force: true prevents errors even if file doesn't exist
+      });
     } catch (e: any) {
       console.warn(`Failed to delete journal for txId "${txId}":`, e.message);
     }

@@ -50,7 +50,7 @@ export interface JournalManager {
 
 // トランザクション用のファイル操作API
 export interface TxHandle {
-  readFile(filePath: string): Promise<Buffer>;
+  readFile(filePath: string, encoding?: BufferEncoding): Promise<string | Buffer>;
   writeFile(filePath: string, data: Buffer | string): Promise<void>;
   appendFile(filePath: string, data: Buffer | string): Promise<void>;
   rm(targetPath: string, options?: { recursive?: boolean }): Promise<void>;
