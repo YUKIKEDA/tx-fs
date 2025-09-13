@@ -1,5 +1,5 @@
 {
-  "name": "tx-fx",
+  "name": "tx-fs",
   "version": "1.0.0",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -12,7 +12,7 @@
     }
   },
   "files": [
-  "dist"
+    "dist"
   ],
   "scripts": {
     "dev": "tsup --watch",
@@ -30,6 +30,8 @@
   "type": "commonjs",
   "description": "",
   "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@types/proper-lockfile": "^4.1.4",
     "@typescript-eslint/eslint-plugin": "^8.43.0",
     "@typescript-eslint/parser": "^8.43.0",
     "eslint": "^9.35.0",
@@ -37,5 +39,8 @@
     "prettier": "^3.6.2",
     "tsup": "^8.5.0",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "proper-lockfile": "^4.1.2"
   }
 }
