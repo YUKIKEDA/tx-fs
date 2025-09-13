@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { Journal, JournalManager } from './types';
+import { Journal, JournalManager } from '../types';
 
 /**
  * Configuration options for the journal manager

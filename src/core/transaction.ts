@@ -3,7 +3,7 @@
 import { randomUUID } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { AppContext, TxState } from './types';
+import { AppContext, TxState } from '../types';
 
 /**
  * Starts a new transaction.

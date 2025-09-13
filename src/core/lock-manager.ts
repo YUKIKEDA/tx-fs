@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { createHash } from 'crypto';
 import * as lockfile from 'proper-lockfile';
-import { LockManager } from './types';
+import { LockManager } from '../types';
 
 /**
  * Configuration options for the lock manager
