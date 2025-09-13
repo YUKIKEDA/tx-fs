@@ -58,7 +58,7 @@ export interface TxHandle {
   exists(targetPath: string): Promise<boolean>;
   rename(oldPath: string, newPath: string): Promise<void>;
   cp(sourcePath: string, destPath: string, options?: { recursive?: boolean }): Promise<void>;
-  snapshotDirectory(dirPath: string): Promise<void>;
+  snapshotDir(dirPath: string): Promise<void>;
 }
 
 // ライブラリのメインエントリーポイントの設定

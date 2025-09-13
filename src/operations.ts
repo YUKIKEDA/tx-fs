@@ -313,3 +313,196 @@ export async function exists(
     throw e;
   }
 }
+
+/**
+ * Renames/moves a file or directory within a transaction.
+ * @param appContext Application context containing managers
+ * @param txState Current transaction state
+ * @param oldPath Current path of the file/directory
+ * @param newPath New path for the file/directory
+ */
+export async function rename(
+  appContext: AppContext,
+  txState: TxState,
+  oldPath: string,
+  newPath: string
+): Promise<void> {
+  const { baseDir, lockManager, journalManager } = appContext;
+  const oldAbsolutePath = resolveAndVerifyPath(baseDir, oldPath);
+  const newAbsolutePath = resolveAndVerifyPath(baseDir, newPath);
+  const oldRelativePath = path.relative(baseDir, oldAbsolutePath);
+  const newRelativePath = path.relative(baseDir, newAbsolutePath);
+
+  // Lock both source and destination parent directories
+  const oldParentDir = path.dirname(oldAbsolutePath);
+  const newParentDir = path.dirname(newAbsolutePath);
+  
+  // Acquire locks in consistent order to prevent deadlocks
+  const lockTargets = [oldParentDir, newParentDir].sort();
+  for (const lockTarget of lockTargets) {
+    if (!txState.acquiredLocks.has(lockTarget)) {
+      const createdResource = await lockManager.acquireExclusiveLock(lockTarget);
+      txState.acquiredLocks.add(lockTarget);
+      if (createdResource) {
+        txState.temporaryResources.add(createdResource);
+      }
+    }
+  }
+
+  // Check if source exists
+  const sourceExists = await fileExists(oldAbsolutePath);
+  if (!sourceExists) {
+    throw new Error(`Source path does not exist: ${oldPath}`);
+  }
+
+  // Create snapshot for rollback if the target already exists
+  const targetExists = await fileExists(newAbsolutePath);
+  if (targetExists) {
+    const snapshotPath = path.join(txState.stagingDir, '_snapshots', newRelativePath);
+    await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
+    await fs.cp(newAbsolutePath, snapshotPath, { recursive: true });
+    txState.journal.snapshots[newRelativePath] = snapshotPath;
+  }
+
+  // Journaling
+  txState.journal.operations.push({ 
+    op: 'RENAME', 
+    from: oldRelativePath, 
+    to: newRelativePath 
+  });
+
+  await journalManager.write(txState.journal);
+}
+
+/**
+ * Copies a file or directory within a transaction.
+ * @param appContext Application context containing managers
+ * @param txState Current transaction state
+ * @param sourcePath Source path to copy from
+ * @param destPath Destination path to copy to
+ * @param options Copy options
+ */
+export async function cp(
+  appContext: AppContext,
+  txState: TxState,
+  sourcePath: string,
+  destPath: string,
+  options?: { recursive?: boolean }
+): Promise<void> {
+  const { baseDir, lockManager, journalManager } = appContext;
+  const sourceAbsolutePath = resolveAndVerifyPath(baseDir, sourcePath);
+  const destAbsolutePath = resolveAndVerifyPath(baseDir, destPath);
+  const sourceRelativePath = path.relative(baseDir, sourceAbsolutePath);
+  const destRelativePath = path.relative(baseDir, destAbsolutePath);
+
+  // Check if source exists FIRST (before any locking)
+  const sourceExists = await fileExists(sourceAbsolutePath);
+  if (!sourceExists) {
+    throw new Error(`Source path does not exist: ${sourcePath}`);
+  }
+
+  // Lock source (for reading) and destination parent (for writing)
+  const sourceParentDir = path.dirname(sourceAbsolutePath);
+  const destParentDir = path.dirname(destAbsolutePath);
+  
+  // Acquire shared lock on source
+  if (!txState.acquiredLocks.has(sourceAbsolutePath)) {
+    const createdResource = await lockManager.acquireSharedLock(sourceAbsolutePath);
+    txState.acquiredLocks.add(sourceAbsolutePath);
+    if (createdResource) {
+      txState.temporaryResources.add(createdResource);
+    }
+  }
+
+  // Acquire exclusive lock on destination parent
+  if (!txState.acquiredLocks.has(destParentDir)) {
+    const createdResource = await lockManager.acquireExclusiveLock(destParentDir);
+    txState.acquiredLocks.add(destParentDir);
+    if (createdResource) {
+      txState.temporaryResources.add(createdResource);
+    }
+  }
+
+  // Copy to staging area
+  const stagingDestPath = path.join(txState.stagingDir, destRelativePath);
+  await fs.mkdir(path.dirname(stagingDestPath), { recursive: true });
+  
+  try {
+    await fs.cp(sourceAbsolutePath, stagingDestPath, { 
+      recursive: options?.recursive ?? true 
+    });
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`Source path does not exist: ${sourcePath}`);
+    }
+    throw error;
+  }
+
+  // Create snapshot for rollback if the target already exists
+  const targetExists = await fileExists(destAbsolutePath);
+  if (targetExists) {
+    const snapshotPath = path.join(txState.stagingDir, '_snapshots', destRelativePath);
+    await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
+    await fs.cp(destAbsolutePath, snapshotPath, { recursive: true });
+    txState.journal.snapshots[destRelativePath] = snapshotPath;
+  }
+
+  // Journaling
+  txState.journal.operations.push({ 
+    op: 'CP', 
+    from: sourceRelativePath, 
+    to: destRelativePath 
+  });
+
+  await journalManager.write(txState.journal);
+}
+
+/**
+ * Creates a snapshot of a directory for backup purposes within a transaction.
+ * This operation creates a point-in-time copy that can be used for rollback.
+ * @param appContext Application context containing managers
+ * @param txState Current transaction state
+ * @param dirPath Path to the directory to snapshot
+ */
+export async function snapshotDir(
+  appContext: AppContext,
+  txState: TxState,
+  dirPath: string
+): Promise<void> {
+  const { baseDir, lockManager, journalManager } = appContext;
+  const absolutePath = resolveAndVerifyPath(baseDir, dirPath);
+  const relativePath = path.relative(baseDir, absolutePath);
+
+  // Check if directory exists FIRST (before any locking)
+  const dirExists = await fileExists(absolutePath);
+  if (!dirExists) {
+    throw new Error(`Directory does not exist: ${dirPath}`);
+  }
+
+  // Acquire shared lock on the directory
+  if (!txState.acquiredLocks.has(absolutePath)) {
+    const createdResource = await lockManager.acquireSharedLock(absolutePath);
+    txState.acquiredLocks.add(absolutePath);
+    if (createdResource) {
+      txState.temporaryResources.add(createdResource);
+    }
+  }
+
+  // Create snapshot in staging area
+  const snapshotPath = path.join(txState.stagingDir, '_snapshots', relativePath);
+  await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
+  
+  try {
+    await fs.cp(absolutePath, snapshotPath, { recursive: true });
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`Directory does not exist: ${dirPath}`);
+    }
+    throw error;
+  }
+
+  // Record snapshot in journal
+  txState.journal.snapshots[relativePath] = snapshotPath;
+
+  await journalManager.write(txState.journal);
+}

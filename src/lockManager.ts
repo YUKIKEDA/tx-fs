@@ -37,29 +37,25 @@ export function createLockManager(options: LockManagerOptions): LockManager {
   };
 
   /**
-   * Ensures that the target file or directory exists, creating it if it doesn't
+   * Checks if the target file or directory exists
    * @param resourcePath Target resource path
-   * @returns Whether it was created and the resource type (file or directory)
+   * @returns Whether it exists and the resource type (file or directory)
    */
-  const ensureTargetExists = async (resourcePath: string): Promise<{ created: boolean, type: 'file' | 'dir' }> => {
+  const checkTargetExists = async (resourcePath: string): Promise<{ exists: boolean, type: 'file' | 'dir' }> => {
     try {
-      await fs.access(resourcePath);
-      return { created: false, type: 'file' }; // Treat as file if it already exists
+      const stats = await fs.stat(resourcePath);
+      return { 
+        exists: true, 
+        type: stats.isDirectory() ? 'dir' : 'file'
+      };
     } catch (e: any) {
       if (e.code === 'ENOENT') {
-        // Determine if it's a file or directory based on whether the path has an extension
+        // Determine if it would be a file or directory based on whether the path has an extension
         const hasExtension = path.extname(resourcePath) !== '';
-        
-        if (hasExtension) {
-          // For files
-          await fs.mkdir(path.dirname(resourcePath), { recursive: true });
-          await fs.writeFile(resourcePath, '');
-          return { created: true, type: 'file' };
-        } else {
-          // For directories
-          await fs.mkdir(resourcePath, { recursive: true });
-          return { created: true, type: 'dir' };
-        }
+        return { 
+          exists: false, 
+          type: hasExtension ? 'file' : 'dir'
+        };
       } else {
         throw e;
       }
@@ -76,8 +72,8 @@ export function createLockManager(options: LockManagerOptions): LockManager {
     // Ensure lock directory exists
     await fs.mkdir(options.lockDir, { recursive: true });
     
-    // Ensure target file/directory exists
-    const targetInfo = await ensureTargetExists(resourcePath);
+    // Check if target file/directory exists (but don't create it)
+    const targetInfo = await checkTargetExists(resourcePath);
     
     // Configure proper-lockfile options
     const lockOptions: lockfile.LockOptions = {
@@ -91,16 +87,34 @@ export function createLockManager(options: LockManagerOptions): LockManager {
       lockfilePath: getLockFilePath(resourcePath),
     };
     
+    // For non-existent resources, we need to create a temporary placeholder
+    // for proper-lockfile to work, but we'll clean it up after unlocking
+    let createdTemporary = false;
+    if (!targetInfo.exists) {
+      try {
+        if (targetInfo.type === 'file') {
+          await fs.mkdir(path.dirname(resourcePath), { recursive: true });
+          await fs.writeFile(resourcePath, '');
+        } else {
+          await fs.mkdir(resourcePath, { recursive: true });
+        }
+        createdTemporary = true;
+      } catch (e) {
+        // If we can't create the temporary placeholder, 
+        // we still try to lock but it might fail
+      }
+    }
+    
     try {
       await lockfile.lock(resourcePath, lockOptions);
       
       // Return temporarily created resource information on successful lock acquisition
       return {
-        createdResource: targetInfo.created ? resourcePath : undefined
+        createdResource: createdTemporary ? resourcePath : undefined
       };
     } catch (err: any) {
       // If lock acquisition fails, remove temporarily created files/directories
-      if (targetInfo.created) {
+      if (createdTemporary) {
         try {
           await fs.rm(resourcePath, { recursive: true, force: true });
         } catch (e) {

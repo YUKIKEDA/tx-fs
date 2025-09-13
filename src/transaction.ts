@@ -123,7 +123,8 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
  * @param txState Transaction state to rollback
  */
 export async function rollbackTransaction(appContext: AppContext, txState: TxState): Promise<void> {
-  // TODO: Add snapshot restore processing here
+  // Restore snapshots for operations that may have overwritten existing files
+  await restoreSnapshots(appContext, txState);
 
   // Remove temporarily created resources
   for (const resourcePath of txState.temporaryResources) {
@@ -135,6 +136,41 @@ export async function rollbackTransaction(appContext: AppContext, txState: TxSta
   }
 
   await cleanup(appContext, txState, 'ROLLED_BACK');
+}
+
+/**
+ * Restores snapshots for rollback operations
+ * @param appContext Application context containing managers
+ * @param txState Transaction state containing snapshots
+ */
+async function restoreSnapshots(appContext: AppContext, txState: TxState): Promise<void> {
+  const { baseDir } = appContext;
+  
+  for (const [relativePath, snapshotPath] of Object.entries(txState.journal.snapshots)) {
+    try {
+      const originalPath = path.join(baseDir, relativePath);
+      
+      // Check if snapshot exists
+      try {
+        await fs.access(snapshotPath);
+      } catch (e: any) {
+        if (e.code === 'ENOENT') {
+          console.warn(`Snapshot not found for rollback: ${snapshotPath}`);
+          continue;
+        }
+        throw e;
+      }
+      
+      // Restore the snapshot to the original location
+      await fs.mkdir(path.dirname(originalPath), { recursive: true });
+      await fs.cp(snapshotPath, originalPath, { recursive: true });
+      
+      console.log(`Restored snapshot: ${relativePath}`);
+    } catch (error) {
+      console.error(`Failed to restore snapshot for ${relativePath}:`, error);
+      // Continue with other snapshots even if one fails
+    }
+  }
 }
 
 /**
