@@ -8,10 +8,11 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
+        os: [windows-latest, ubuntu-latest]
         node-version: [18.x, 20.x] # サポートするNode.jsのバージョン
 
     steps:
