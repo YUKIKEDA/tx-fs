@@ -31,10 +31,6 @@ describe('tx-fs エッジケース・エラーハンドリングテスト', () =
     it('絶対パスを拒否する', async () => {
       await expect(
         txManager.run(async (tx) => {
-          // HACK: Debug logging
-          console.log('Testing absolute path rejection...');
-          console.log('Test directory:', testDir);
-          console.log('OS platform:', process.platform);
           await tx.writeFile('C:\\absolute\\path.txt', 'content');
         }),
       ).rejects.toThrow('outside of the transaction');

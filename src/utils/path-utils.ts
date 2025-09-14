@@ -11,6 +11,29 @@ export function resolveAndVerifyPath(
   baseDir: string,
   userPath: string,
 ): string {
+  // First, check if the user-provided path is an absolute path or UNC path
+  // This prevents cross-platform absolute path attacks
+  const isAbsolutePath = path.isAbsolute(userPath);
+  const isUncPath = userPath.startsWith('\\\\') || userPath.startsWith('//');
+  const isWindowsDrivePath = /^[A-Za-z]:[\\/]/.test(userPath);
+  
+  //HACK Debug logging for troubleshooting
+  console.log('Path validation debug:', {
+    userPath,
+    baseDir,
+    isAbsolutePath,
+    isUncPath,
+    isWindowsDrivePath,
+    platform: process.platform
+  });
+  
+  // Reject absolute paths, UNC paths, and Windows drive paths
+  if (isAbsolutePath || isUncPath || isWindowsDrivePath) {
+    throw new Error(
+      `Path "${userPath}" is outside of the transaction's base directory.`,
+    );
+  }
+  
   // Normalize both paths to ensure consistent comparison
   const normalizedBaseDir = path.resolve(baseDir);
   const absolutePath = path.resolve(baseDir, userPath);
@@ -20,21 +43,8 @@ export function resolveAndVerifyPath(
   // Use path.relative to get a more reliable check
   const relativePath = path.relative(normalizedBaseDir, normalizedAbsolutePath);
   
-  //HACK Debug logging for troubleshooting
-  console.log('Path validation debug:', {
-    userPath,
-    baseDir,
-    normalizedBaseDir,
-    absolutePath,
-    normalizedAbsolutePath,
-    relativePath,
-    isAbsoluteRelativePath: path.isAbsolute(relativePath),
-    startsWithDotDot: relativePath.startsWith('..'),
-    platform: process.platform
-  });
-  
-  // If the relative path starts with '..' or is absolute, it's outside the base directory
-  const isOutside = relativePath.startsWith('..') || path.isAbsolute(relativePath);
+  // If the relative path starts with '..', it's outside the base directory
+  const isOutside = relativePath.startsWith('..');
   
   if (isOutside) {
     throw new Error(
