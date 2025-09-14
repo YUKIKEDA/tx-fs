@@ -20,6 +20,19 @@ export function resolveAndVerifyPath(
   // Use path.relative to get a more reliable check
   const relativePath = path.relative(normalizedBaseDir, normalizedAbsolutePath);
   
+  //HACK Debug logging for troubleshooting
+  console.log('Path validation debug:', {
+    userPath,
+    baseDir,
+    normalizedBaseDir,
+    absolutePath,
+    normalizedAbsolutePath,
+    relativePath,
+    isAbsoluteRelativePath: path.isAbsolute(relativePath),
+    startsWithDotDot: relativePath.startsWith('..'),
+    platform: process.platform
+  });
+  
   // If the relative path starts with '..' or is absolute, it's outside the base directory
   const isOutside = relativePath.startsWith('..') || path.isAbsolute(relativePath);
   
