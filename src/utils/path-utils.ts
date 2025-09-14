@@ -17,16 +17,6 @@ export function resolveAndVerifyPath(
   const isUncPath = userPath.startsWith('\\\\') || userPath.startsWith('//');
   const isWindowsDrivePath = /^[A-Za-z]:[\\/]/.test(userPath);
   
-  //HACK Debug logging for troubleshooting
-  console.log('Path validation debug:', {
-    userPath,
-    baseDir,
-    isAbsolutePath,
-    isUncPath,
-    isWindowsDrivePath,
-    platform: process.platform
-  });
-  
   // Reject absolute paths, UNC paths, and Windows drive paths
   if (isAbsolutePath || isUncPath || isWindowsDrivePath) {
     throw new Error(

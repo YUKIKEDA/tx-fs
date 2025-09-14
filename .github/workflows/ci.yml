@@ -30,9 +30,7 @@ jobs:
       run: npm run format -- --check
     - name: Type check
       run: npx tsc --noEmit
-    # - name: Test with coverage
-    #   run: npm run coverage
-    - name: Test failing cases only
-      run: npm test -- test/edge-cases.test.ts test/security.test.ts -t "絶対パスを拒否する|UNCパスを拒否する" --reporter=verbose
+    - name: Test with coverage
+      run: npm run coverage
     - name: Build
       run: npm run build
