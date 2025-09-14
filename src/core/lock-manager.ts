@@ -22,7 +22,6 @@ export interface LockManagerOptions {
  * @returns Lock manager instance
  */
 export function createLockManager(options: LockManagerOptions): LockManager {
-  
   /**
    * Generates a lock file path from a resource path
    * @param resourcePath Resource path to lock
@@ -41,20 +40,22 @@ export function createLockManager(options: LockManagerOptions): LockManager {
    * @param resourcePath Target resource path
    * @returns Whether it exists and the resource type (file or directory)
    */
-  const checkTargetExists = async (resourcePath: string): Promise<{ exists: boolean, type: 'file' | 'dir' }> => {
+  const checkTargetExists = async (
+    resourcePath: string,
+  ): Promise<{ exists: boolean; type: 'file' | 'dir' }> => {
     try {
       const stats = await fs.stat(resourcePath);
-      return { 
-        exists: true, 
-        type: stats.isDirectory() ? 'dir' : 'file'
+      return {
+        exists: true,
+        type: stats.isDirectory() ? 'dir' : 'file',
       };
     } catch (e: any) {
       if (e.code === 'ENOENT') {
         // Determine if it would be a file or directory based on whether the path has an extension
         const hasExtension = path.extname(resourcePath) !== '';
-        return { 
-          exists: false, 
-          type: hasExtension ? 'file' : 'dir'
+        return {
+          exists: false,
+          type: hasExtension ? 'file' : 'dir',
         };
       } else {
         throw e;
@@ -68,13 +69,18 @@ export function createLockManager(options: LockManagerOptions): LockManager {
    * @param _isShared Whether it's a shared lock (currently unused, reserved for future extension)
    * @returns Path of the resource created during lock acquisition (if any)
    */
-  const acquireLock = async (resourcePath: string, _isShared: boolean): Promise<{ createdResource?: string }> => {
+  const acquireLock = async (
+    resourcePath: string,
+    _isShared: boolean,
+  ): Promise<{ createdResource?: string }> => {
+    // Suppress unused parameter warning
+    void _isShared;
     // Ensure lock directory exists
     await fs.mkdir(options.lockDir, { recursive: true });
-    
+
     // Check if target file/directory exists (but don't create it)
     const targetInfo = await checkTargetExists(resourcePath);
-    
+
     // Configure proper-lockfile options
     const lockOptions: lockfile.LockOptions = {
       stale: options.timeout * 1.5,
@@ -86,7 +92,7 @@ export function createLockManager(options: LockManagerOptions): LockManager {
       },
       lockfilePath: getLockFilePath(resourcePath),
     };
-    
+
     // For non-existent resources, we need to create a temporary placeholder
     // for proper-lockfile to work, but we'll clean it up after unlocking
     let createdTemporary = false;
@@ -99,32 +105,34 @@ export function createLockManager(options: LockManagerOptions): LockManager {
           await fs.mkdir(resourcePath, { recursive: true });
         }
         createdTemporary = true;
-      } catch (e) {
-        // If we can't create the temporary placeholder, 
+      } catch {
+        // If we can't create the temporary placeholder,
         // we still try to lock but it might fail
       }
     }
-    
+
     try {
       await lockfile.lock(resourcePath, lockOptions);
-      
+
       // Return temporarily created resource information on successful lock acquisition
       return {
-        createdResource: createdTemporary ? resourcePath : undefined
+        createdResource: createdTemporary ? resourcePath : undefined,
       };
     } catch (err: any) {
       // If lock acquisition fails, remove temporarily created files/directories
       if (createdTemporary) {
         try {
           await fs.rm(resourcePath, { recursive: true, force: true });
-        } catch (e) {
+        } catch {
           // Ignore deletion failures
         }
       }
-      
+
       // Convert timeout error to a more understandable message
       if (err.code === 'ELOCKED') {
-        throw new Error(`Failed to acquire lock on "${resourcePath}" within ${options.timeout}ms.`);
+        throw new Error(
+          `Failed to acquire lock on "${resourcePath}" within ${options.timeout}ms.`,
+        );
       }
       throw err;
     }
@@ -171,7 +179,7 @@ export function createLockManager(options: LockManagerOptions): LockManager {
      * @param resourcePaths Set of resource paths to release locks from
      */
     releaseAll: async (resourcePaths) => {
-      const promises = Array.from(resourcePaths).map(p => release(p));
+      const promises = Array.from(resourcePaths).map((p) => release(p));
       await Promise.all(promises);
     },
   };

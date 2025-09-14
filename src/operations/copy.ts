@@ -17,7 +17,7 @@ export async function cp(
   txState: TxState,
   sourcePath: string,
   destPath: string,
-  options?: { recursive?: boolean }
+  options?: { recursive?: boolean },
 ): Promise<void> {
   const { baseDir, lockManager, journalManager } = appContext;
   const sourceAbsolutePath = resolveAndVerifyPath(baseDir, sourcePath);
@@ -36,7 +36,8 @@ export async function cp(
 
   // Acquire shared lock on source
   if (!txState.acquiredLocks.has(sourceAbsolutePath)) {
-    const createdResource = await lockManager.acquireSharedLock(sourceAbsolutePath);
+    const createdResource =
+      await lockManager.acquireSharedLock(sourceAbsolutePath);
     txState.acquiredLocks.add(sourceAbsolutePath);
     if (createdResource) {
       txState.temporaryResources.add(createdResource);
@@ -45,7 +46,8 @@ export async function cp(
 
   // Acquire exclusive lock on destination parent
   if (!txState.acquiredLocks.has(destParentDir)) {
-    const createdResource = await lockManager.acquireExclusiveLock(destParentDir);
+    const createdResource =
+      await lockManager.acquireExclusiveLock(destParentDir);
     txState.acquiredLocks.add(destParentDir);
     if (createdResource) {
       txState.temporaryResources.add(createdResource);
@@ -55,7 +57,11 @@ export async function cp(
   // Create snapshot for rollback if the target already exists (BEFORE modifying it)
   const targetExists = await exists(appContext, txState, destPath);
   if (targetExists) {
-    const snapshotPath = path.join(txState.stagingDir, '_snapshots', destRelativePath);
+    const snapshotPath = path.join(
+      txState.stagingDir,
+      '_snapshots',
+      destRelativePath,
+    );
     await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
 
     // Always snapshot the ORIGINAL file, not staging version
@@ -83,7 +89,7 @@ export async function cp(
 
   try {
     await fs.cp(actualSourcePath, stagingDestPath, {
-      recursive: options?.recursive ?? true
+      recursive: options?.recursive ?? true,
     });
   } catch (error: any) {
     if (error.code === 'ENOENT') {
@@ -96,7 +102,7 @@ export async function cp(
   txState.journal.operations.push({
     op: 'CP',
     from: sourceRelativePath,
-    to: destRelativePath
+    to: destRelativePath,
   });
 
   await journalManager.write(txState.journal);

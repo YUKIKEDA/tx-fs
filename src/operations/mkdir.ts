@@ -14,7 +14,7 @@ export async function mkdir(
   appContext: AppContext,
   txState: TxState,
   dirPath: string,
-  options?: { recursive?: boolean }
+  options?: { recursive?: boolean },
 ): Promise<void> {
   const { baseDir, lockManager, journalManager } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, dirPath);
@@ -38,7 +38,7 @@ export async function mkdir(
 
   // Journaling
   const existingOpIndex = txState.journal.operations.findIndex(
-    op => op.op === 'MKDIR' && op.path === relativePath
+    (op) => op.op === 'MKDIR' && op.path === relativePath,
   );
   if (existingOpIndex === -1) {
     txState.journal.operations.push({ op: 'MKDIR', path: relativePath });

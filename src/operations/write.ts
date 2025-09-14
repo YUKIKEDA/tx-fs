@@ -16,7 +16,7 @@ export async function writeFile(
   appContext: AppContext,
   txState: TxState,
   filePath: string,
-  data: Buffer | string
+  data: Buffer | string,
 ): Promise<void> {
   const { baseDir, lockManager, journalManager } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, filePath);
@@ -45,7 +45,7 @@ export async function writeFile(
   // Overwrite write operations to the same file with the latest one
   // (e.g., tx.writeFile('a', '1'); tx.writeFile('a', '2'); -> only one 'WRITE a' should remain in journal)
   const existingOpIndex = txState.journal.operations.findIndex(
-    op => op.op === 'WRITE' && op.path === relativePath
+    (op) => op.op === 'WRITE' && op.path === relativePath,
   );
   if (existingOpIndex === -1) {
     txState.journal.operations.push({ op: 'WRITE', path: relativePath });

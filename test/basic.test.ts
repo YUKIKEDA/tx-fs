@@ -43,7 +43,7 @@ describe('tx-fs Basic Tests', () => {
     const result = await txManager.run(async (tx) => {
       // ファイルに書き込み
       await tx.writeFile('test.txt', 'Hello World');
-      
+
       // 同じトランザクション内で読み取り
       const content = await tx.readFile('test.txt');
       return content.toString();
@@ -66,7 +66,10 @@ describe('tx-fs Basic Tests', () => {
       await tx.appendFile('append.txt', 'World!');
     });
 
-    const content = await fs.readFile(path.join(BASE_DIR, 'append.txt'), 'utf-8');
+    const content = await fs.readFile(
+      path.join(BASE_DIR, 'append.txt'),
+      'utf-8',
+    );
     expect(content).toBe('Hello World!');
   });
 
@@ -81,7 +84,7 @@ describe('tx-fs Basic Tests', () => {
 
     const dirPath = path.join(BASE_DIR, 'test-dir');
     const filePath = path.join(dirPath, 'file.txt');
-    
+
     await expect(fs.access(dirPath)).resolves.not.toThrow();
     const content = await fs.readFile(filePath, 'utf-8');
     expect(content).toBe('content');
@@ -94,13 +97,13 @@ describe('tx-fs Basic Tests', () => {
     const results = await txManager.run(async (tx) => {
       // 存在しないファイル
       const nonExistent = await tx.exists('does-not-exist.txt');
-      
+
       // ファイル作成
       await tx.writeFile('exists.txt', 'content');
-      
+
       // 作成したファイル
       const existent = await tx.exists('exists.txt');
-      
+
       return { nonExistent, existent };
     });
 
@@ -115,7 +118,10 @@ describe('tx-fs Basic Tests', () => {
     // ファイルとディレクトリを事前作成
     await fs.writeFile(path.join(BASE_DIR, 'to-delete.txt'), 'content');
     await fs.mkdir(path.join(BASE_DIR, 'to-delete-dir'), { recursive: true });
-    await fs.writeFile(path.join(BASE_DIR, 'to-delete-dir', 'file.txt'), 'content');
+    await fs.writeFile(
+      path.join(BASE_DIR, 'to-delete-dir', 'file.txt'),
+      'content',
+    );
 
     await txManager.run(async (tx) => {
       await tx.rm('to-delete.txt');
@@ -123,7 +129,11 @@ describe('tx-fs Basic Tests', () => {
     });
 
     // ファイルとディレクトリが削除されているかチェック
-    await expect(fs.access(path.join(BASE_DIR, 'to-delete.txt'))).rejects.toThrow();
-    await expect(fs.access(path.join(BASE_DIR, 'to-delete-dir'))).rejects.toThrow();
+    await expect(
+      fs.access(path.join(BASE_DIR, 'to-delete.txt')),
+    ).rejects.toThrow();
+    await expect(
+      fs.access(path.join(BASE_DIR, 'to-delete-dir')),
+    ).rejects.toThrow();
   });
 });

@@ -59,36 +59,35 @@ describe('tx-fs リカバリーテスト', () => {
     const incompleteJournal = {
       id: txId,
       status: 'IN_PROGRESS',
-      operations: [
-        { op: 'WRITE', path: 'new-file.txt' }
-      ],
-      snapshots: {}
+      operations: [{ op: 'WRITE', path: 'new-file.txt' }],
+      snapshots: {},
     };
 
     await fs.writeFile(
       path.join(journalDir, `${txId}.json`),
-      JSON.stringify(incompleteJournal, null, 2)
+      JSON.stringify(incompleteJournal, null, 2),
     );
 
     // Create another transaction in PREPARED state (should be rolled forward)
     const preparedTxId = 'test-tx-456';
     const preparedStagingDir = path.join(stagingRootDir, preparedTxId);
-    
+
     await fs.mkdir(preparedStagingDir, { recursive: true });
-    await fs.writeFile(path.join(preparedStagingDir, 'prepared-file.txt'), 'prepared content');
+    await fs.writeFile(
+      path.join(preparedStagingDir, 'prepared-file.txt'),
+      'prepared content',
+    );
 
     const preparedJournal = {
       id: preparedTxId,
       status: 'PREPARED',
-      operations: [
-        { op: 'WRITE', path: 'prepared-file.txt' }
-      ],
-      snapshots: {}
+      operations: [{ op: 'WRITE', path: 'prepared-file.txt' }],
+      snapshots: {},
     };
 
     await fs.writeFile(
       path.join(journalDir, `${preparedTxId}.json`),
-      JSON.stringify(preparedJournal, null, 2)
+      JSON.stringify(preparedJournal, null, 2),
     );
 
     // Now create a new transaction manager to trigger recovery
@@ -97,19 +96,31 @@ describe('tx-fs リカバリーテスト', () => {
 
     // Check recovery results
     // The IN_PROGRESS transaction should be rolled back (file should not exist)
-    await expect(fs.access(path.join(testDir, 'new-file.txt'))).rejects.toThrow();
+    await expect(
+      fs.access(path.join(testDir, 'new-file.txt')),
+    ).rejects.toThrow();
 
     // The PREPARED transaction should be rolled forward (file should exist)
-    const preparedContent = await fs.readFile(path.join(testDir, 'prepared-file.txt'), 'utf-8');
+    const preparedContent = await fs.readFile(
+      path.join(testDir, 'prepared-file.txt'),
+      'utf-8',
+    );
     expect(preparedContent).toBe('prepared content');
 
     // Original file should still exist
-    const existingContent = await fs.readFile(path.join(testDir, 'existing.txt'), 'utf-8');
+    const existingContent = await fs.readFile(
+      path.join(testDir, 'existing.txt'),
+      'utf-8',
+    );
     expect(existingContent).toBe('existing content');
 
     // Journals should be cleaned up
-    await expect(fs.access(path.join(journalDir, `${txId}.json`))).rejects.toThrow();
-    await expect(fs.access(path.join(journalDir, `${preparedTxId}.json`))).rejects.toThrow();
+    await expect(
+      fs.access(path.join(journalDir, `${txId}.json`)),
+    ).rejects.toThrow();
+    await expect(
+      fs.access(path.join(journalDir, `${preparedTxId}.json`)),
+    ).rejects.toThrow();
 
     // Staging directories should be cleaned up
     await expect(fs.access(stagingDir)).rejects.toThrow();
@@ -129,20 +140,21 @@ describe('tx-fs リカバリーテスト', () => {
     const stagingDir = path.join(stagingRootDir, txId);
 
     await fs.mkdir(stagingDir, { recursive: true });
-    await fs.writeFile(path.join(stagingDir, 'leftover-file.txt'), 'leftover content');
+    await fs.writeFile(
+      path.join(stagingDir, 'leftover-file.txt'),
+      'leftover content',
+    );
 
     const committedJournal = {
       id: txId,
       status: 'COMMITTED',
-      operations: [
-        { op: 'WRITE', path: 'some-file.txt' }
-      ],
-      snapshots: {}
+      operations: [{ op: 'WRITE', path: 'some-file.txt' }],
+      snapshots: {},
     };
 
     await fs.writeFile(
       path.join(journalDir, `${txId}.json`),
-      JSON.stringify(committedJournal, null, 2)
+      JSON.stringify(committedJournal, null, 2),
     );
 
     // Trigger recovery
@@ -150,7 +162,9 @@ describe('tx-fs リカバリーテスト', () => {
     await recoveryTxManager.initialize();
 
     // Journal and staging should be cleaned up
-    await expect(fs.access(path.join(journalDir, `${txId}.json`))).rejects.toThrow();
+    await expect(
+      fs.access(path.join(journalDir, `${txId}.json`)),
+    ).rejects.toThrow();
     await expect(fs.access(stagingDir)).rejects.toThrow();
   });
 
@@ -167,20 +181,21 @@ describe('tx-fs リカバリーテスト', () => {
     const stagingDir = path.join(stagingRootDir, txId);
 
     await fs.mkdir(stagingDir, { recursive: true });
-    await fs.writeFile(path.join(stagingDir, 'leftover-file.txt'), 'leftover content');
+    await fs.writeFile(
+      path.join(stagingDir, 'leftover-file.txt'),
+      'leftover content',
+    );
 
     const rolledBackJournal = {
       id: txId,
       status: 'ROLLED_BACK',
-      operations: [
-        { op: 'WRITE', path: 'some-file.txt' }
-      ],
-      snapshots: {}
+      operations: [{ op: 'WRITE', path: 'some-file.txt' }],
+      snapshots: {},
     };
 
     await fs.writeFile(
       path.join(journalDir, `${txId}.json`),
-      JSON.stringify(rolledBackJournal, null, 2)
+      JSON.stringify(rolledBackJournal, null, 2),
     );
 
     // Trigger recovery
@@ -188,7 +203,9 @@ describe('tx-fs リカバリーテスト', () => {
     await recoveryTxManager.initialize();
 
     // Journal and staging should be cleaned up
-    await expect(fs.access(path.join(journalDir, `${txId}.json`))).rejects.toThrow();
+    await expect(
+      fs.access(path.join(journalDir, `${txId}.json`)),
+    ).rejects.toThrow();
     await expect(fs.access(stagingDir)).rejects.toThrow();
   });
 
@@ -202,7 +219,7 @@ describe('tx-fs リカバリーテスト', () => {
     // Create an invalid journal file
     await fs.writeFile(
       path.join(journalDir, 'invalid-tx.json'),
-      'invalid json content'
+      'invalid json content',
     );
 
     // Recovery should not throw and should continue initialization
@@ -220,7 +237,7 @@ describe('tx-fs リカバリーテスト', () => {
 
   it('ジャーナルが存在しない場合のリカバリーを処理する', async () => {
     txManager = createTxFileManager({ baseDir: testDir });
-    
+
     // Initialize should work fine with no existing journals
     await expect(txManager.initialize()).resolves.not.toThrow();
 

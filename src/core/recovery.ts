@@ -57,7 +57,7 @@ export async function recover(appContext: AppContext): Promise<void> {
 async function rollbackIncompleteTransaction(
   appContext: AppContext,
   txId: string,
-  stagingDir: string
+  stagingDir: string,
 ): Promise<void> {
   const { journalManager } = appContext;
 
@@ -81,7 +81,7 @@ async function rollbackIncompleteTransaction(
 async function rollForwardPreparedTransaction(
   appContext: AppContext,
   journal: Journal,
-  stagingDir: string
+  stagingDir: string,
 ): Promise<void> {
   const { baseDir } = appContext;
 
@@ -157,7 +157,7 @@ async function rollForwardPreparedTransaction(
 async function cleanupCompletedTransaction(
   appContext: AppContext,
   txId: string,
-  stagingDir: string
+  stagingDir: string,
 ): Promise<void> {
   const { journalManager } = appContext;
 

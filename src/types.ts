@@ -50,14 +50,21 @@ export interface JournalManager {
 
 // トランザクション用のファイル操作API
 export interface TxHandle {
-  readFile(filePath: string, encoding?: BufferEncoding): Promise<string | Buffer>;
+  readFile(
+    filePath: string,
+    encoding?: BufferEncoding,
+  ): Promise<string | Buffer>;
   writeFile(filePath: string, data: Buffer | string): Promise<void>;
   appendFile(filePath: string, data: Buffer | string): Promise<void>;
   rm(targetPath: string, options?: { recursive?: boolean }): Promise<void>;
   mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void>;
   exists(targetPath: string): Promise<boolean>;
   rename(oldPath: string, newPath: string): Promise<void>;
-  cp(sourcePath: string, destPath: string, options?: { recursive?: boolean }): Promise<void>;
+  cp(
+    sourcePath: string,
+    destPath: string,
+    options?: { recursive?: boolean },
+  ): Promise<void>;
   snapshotDir(dirPath: string): Promise<void>;
 }
 

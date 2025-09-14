@@ -13,7 +13,7 @@ import { resolveAndVerifyPath } from '../utils/path-utils';
 export async function exists(
   appContext: AppContext,
   txState: TxState,
-  targetPath: string
+  targetPath: string,
 ): Promise<boolean> {
   const { baseDir } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, targetPath);
@@ -22,7 +22,7 @@ export async function exists(
   // exists operation doesn't actually acquire locks (read-only with no side effects)
   // Check if file marked for deletion exists in journal
   const isMarkedForDeletion = txState.journal.operations.some(
-    op => op.op === 'RM' && op.path === relativePath
+    (op) => op.op === 'RM' && op.path === relativePath,
   );
 
   if (isMarkedForDeletion) {
@@ -31,7 +31,7 @@ export async function exists(
 
   // Check if file was renamed FROM this path (source of rename)
   const wasRenamedFrom = txState.journal.operations.some(
-    op => op.op === 'RENAME' && op.from === relativePath
+    (op) => op.op === 'RENAME' && op.from === relativePath,
   );
 
   if (wasRenamedFrom) {
@@ -40,7 +40,7 @@ export async function exists(
 
   // Check if file was renamed TO this path (destination of rename)
   const wasRenamedTo = txState.journal.operations.find(
-    op => op.op === 'RENAME' && op.to === relativePath
+    (op) => op.op === 'RENAME' && op.to === relativePath,
   );
 
   if (wasRenamedTo) {
@@ -49,7 +49,7 @@ export async function exists(
 
   // Check if file was created via WRITE operation
   const wasWritten = txState.journal.operations.some(
-    op => op.op === 'WRITE' && op.path === relativePath
+    (op) => op.op === 'WRITE' && op.path === relativePath,
   );
 
   if (wasWritten) {
@@ -58,7 +58,7 @@ export async function exists(
 
   // Check if file was created via CP operation
   const wasCopiedTo = txState.journal.operations.find(
-    op => op.op === 'CP' && op.to === relativePath
+    (op) => op.op === 'CP' && op.to === relativePath,
   );
 
   if (wasCopiedTo) {

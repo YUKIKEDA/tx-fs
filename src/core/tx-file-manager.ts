@@ -1,10 +1,29 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { TxFileManagerOptions, TxFileManager, TxHandle, AppContext } from '../types';
+import {
+  TxFileManagerOptions,
+  TxFileManager,
+  TxHandle,
+  AppContext,
+} from '../types';
 import { createLockManager } from './lock-manager';
 import { createJournalManager } from './journal-manager';
-import { beginTransaction, commitTransaction, rollbackTransaction } from './transaction';
-import { writeFile, readFile, appendFile, rm, mkdir, exists, rename, cp, snapshotDir } from '../operations';
+import {
+  beginTransaction,
+  commitTransaction,
+  rollbackTransaction,
+} from './transaction';
+import {
+  writeFile,
+  readFile,
+  appendFile,
+  rm,
+  mkdir,
+  exists,
+  rename,
+  cp,
+  snapshotDir,
+} from '../operations';
 import { recover } from './recovery';
 
 /**
@@ -12,7 +31,9 @@ import { recover } from './recovery';
  * @param options Configuration options
  * @returns TxFileManager instance
  */
-export function createTxFileManager(options: TxFileManagerOptions): TxFileManager {
+export function createTxFileManager(
+  options: TxFileManagerOptions,
+): TxFileManager {
   const baseDir = path.resolve(options.baseDir);
   const txDir = path.join(baseDir, options.txDirName ?? '.tx');
 
@@ -59,22 +80,35 @@ export function createTxFileManager(options: TxFileManagerOptions): TxFileManage
    */
   const run = async <T>(callback: (tx: TxHandle) => Promise<T>): Promise<T> => {
     if (!isInitialized) {
-      throw new Error('TxFileManager is not initialized. Call initialize() first.');
+      throw new Error(
+        'TxFileManager is not initialized. Call initialize() first.',
+      );
     }
 
     const txState = await beginTransaction(appContext);
 
     // Create transaction handle
     const txHandle: TxHandle = {
-      readFile: (filePath: string, encoding?: BufferEncoding) => readFile(appContext, txState, filePath, encoding),
-      writeFile: (filePath: string, data: Buffer | string) => writeFile(appContext, txState, filePath, data),
-      appendFile: (filePath: string, data: Buffer | string) => appendFile(appContext, txState, filePath, data),
-      rm: (targetPath: string, options?: { recursive?: boolean }) => rm(appContext, txState, targetPath, options),
-      mkdir: (dirPath: string, options?: { recursive?: boolean }) => mkdir(appContext, txState, dirPath, options),
+      readFile: (filePath: string, encoding?: BufferEncoding) =>
+        readFile(appContext, txState, filePath, encoding),
+      writeFile: (filePath: string, data: Buffer | string) =>
+        writeFile(appContext, txState, filePath, data),
+      appendFile: (filePath: string, data: Buffer | string) =>
+        appendFile(appContext, txState, filePath, data),
+      rm: (targetPath: string, options?: { recursive?: boolean }) =>
+        rm(appContext, txState, targetPath, options),
+      mkdir: (dirPath: string, options?: { recursive?: boolean }) =>
+        mkdir(appContext, txState, dirPath, options),
       exists: (targetPath: string) => exists(appContext, txState, targetPath),
-      rename: (oldPath: string, newPath: string) => rename(appContext, txState, oldPath, newPath),
-      cp: (sourcePath: string, destPath: string, options?: { recursive?: boolean }) => cp(appContext, txState, sourcePath, destPath, options),
-      snapshotDir: (dirPath: string) => snapshotDir(appContext, txState, dirPath),
+      rename: (oldPath: string, newPath: string) =>
+        rename(appContext, txState, oldPath, newPath),
+      cp: (
+        sourcePath: string,
+        destPath: string,
+        options?: { recursive?: boolean },
+      ) => cp(appContext, txState, sourcePath, destPath, options),
+      snapshotDir: (dirPath: string) =>
+        snapshotDir(appContext, txState, dirPath),
     };
 
     try {

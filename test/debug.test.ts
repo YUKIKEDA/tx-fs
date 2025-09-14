@@ -24,23 +24,22 @@ describe('proper-lockfile debug', () => {
     // 先に実際のファイルを作成してからロックする方式を試す
     const targetFile = path.join(TEST_DIR, 'target.txt');
     await fs.writeFile(targetFile, 'test content');
-    
+
     try {
       console.log('Locking file:', targetFile);
-      
+
       // ロックを取得
       await lock(targetFile);
       console.log('Lock acquired');
-      
+
       // ロックファイルの存在確認（.lockが追加される）
       const lockFile = targetFile + '.lock';
       await expect(fs.access(lockFile)).resolves.not.toThrow();
       console.log('Lock file exists:', lockFile);
-      
+
       // ロックを解放
       await unlock(targetFile);
       console.log('Lock released');
-      
     } catch (error) {
       console.error('Lock error:', error);
       throw error;
@@ -50,7 +49,7 @@ describe('proper-lockfile debug', () => {
   it('ディレクトリをロック対象として動作する', async () => {
     const lockDir = path.join(TEST_DIR, 'lockdir');
     await fs.mkdir(lockDir);
-    
+
     try {
       await lock(lockDir);
       await unlock(lockDir);

@@ -14,7 +14,7 @@ import { fileExists } from '../utils/fs-utils';
 export async function snapshotDir(
   appContext: AppContext,
   txState: TxState,
-  dirPath: string
+  dirPath: string,
 ): Promise<void> {
   const { baseDir, lockManager, journalManager } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, dirPath);
@@ -36,7 +36,11 @@ export async function snapshotDir(
   }
 
   // Create snapshot in staging area
-  const snapshotPath = path.join(txState.stagingDir, '_snapshots', relativePath);
+  const snapshotPath = path.join(
+    txState.stagingDir,
+    '_snapshots',
+    relativePath,
+  );
   await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
 
   try {

@@ -15,8 +15,9 @@ export interface JournalManagerOptions {
  * @param options Journal manager configuration options
  * @returns Journal manager instance
  */
-export function createJournalManager(options: JournalManagerOptions): JournalManager {
-  
+export function createJournalManager(
+  options: JournalManagerOptions,
+): JournalManager {
   /**
    * Generates a journal file path from a transaction ID
    * @param txId Transaction ID
@@ -33,7 +34,7 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
   const retryWithBackoff = async <T>(
     operation: () => Promise<T>,
     maxRetries: number = 3,
-    baseDelayMs: number = 100
+    baseDelayMs: number = 100,
   ): Promise<T> => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -42,7 +43,7 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
         if (error.code === 'EPERM' && attempt < maxRetries) {
           // Exponential backoff for permission errors (common on Windows due to antivirus)
           const delay = baseDelayMs * Math.pow(2, attempt - 1);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
         throw error;
@@ -56,7 +57,10 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
    * @param journal Journal object to write
    * @param opts.sync If true, attempts synchronous write like fs.sync.writeFile (Node.js fs/promises doesn't have full sync, so uses fd.sync() as substitute)
    */
-  const write = async (journal: Journal, opts?: { sync?: boolean }): Promise<void> => {
+  const write = async (
+    journal: Journal,
+    opts?: { sync?: boolean },
+  ): Promise<void> => {
     const journalPath = getJournalPath(journal.id);
     const data = JSON.stringify(journal, null, 2); // Format for readability
 
@@ -80,7 +84,7 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
       }
     });
   };
-  
+
   /**
    * Reads a journal file with the specified ID
    * @param txId Transaction ID
@@ -120,7 +124,7 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
       console.warn(`Failed to delete journal for txId "${txId}":`, e.message);
     }
   };
-  
+
   /**
    * Lists all journal IDs in the journal directory.
    * Used for recovery processing.
@@ -130,8 +134,8 @@ export function createJournalManager(options: JournalManagerOptions): JournalMan
     try {
       const files = await fs.readdir(options.journalDir);
       return files
-        .filter(file => file.endsWith('.json'))
-        .map(file => path.basename(file, '.json'));
+        .filter((file) => file.endsWith('.json'))
+        .map((file) => path.basename(file, '.json'));
     } catch (e: any) {
       if (e.code === 'ENOENT') {
         return []; // Return empty array if directory doesn't exist

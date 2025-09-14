@@ -15,7 +15,7 @@ export async function rename(
   appContext: AppContext,
   txState: TxState,
   oldPath: string,
-  newPath: string
+  newPath: string,
 ): Promise<void> {
   const { baseDir, lockManager, journalManager } = appContext;
   const oldAbsolutePath = resolveAndVerifyPath(baseDir, oldPath);
@@ -31,7 +31,8 @@ export async function rename(
   const lockTargets = [oldParentDir, newParentDir].sort();
   for (const lockTarget of lockTargets) {
     if (!txState.acquiredLocks.has(lockTarget)) {
-      const createdResource = await lockManager.acquireExclusiveLock(lockTarget);
+      const createdResource =
+        await lockManager.acquireExclusiveLock(lockTarget);
       txState.acquiredLocks.add(lockTarget);
       if (createdResource) {
         txState.temporaryResources.add(createdResource);
@@ -48,7 +49,11 @@ export async function rename(
   // Create snapshot for rollback if the target already exists
   const targetExists = await exists(appContext, txState, newPath);
   if (targetExists) {
-    const snapshotPath = path.join(txState.stagingDir, '_snapshots', newRelativePath);
+    const snapshotPath = path.join(
+      txState.stagingDir,
+      '_snapshots',
+      newRelativePath,
+    );
     await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
 
     // Always snapshot the ORIGINAL file, not staging version
@@ -80,7 +85,7 @@ export async function rename(
   txState.journal.operations.push({
     op: 'RENAME',
     from: oldRelativePath,
-    to: newRelativePath
+    to: newRelativePath,
   });
 
   await journalManager.write(txState.journal);

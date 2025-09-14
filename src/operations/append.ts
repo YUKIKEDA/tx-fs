@@ -14,7 +14,7 @@ export async function appendFile(
   appContext: AppContext,
   txState: TxState,
   filePath: string,
-  data: Buffer | string
+  data: Buffer | string,
 ): Promise<void> {
   const { baseDir, lockManager, journalManager } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, filePath);
@@ -22,7 +22,8 @@ export async function appendFile(
 
   // Acquire exclusive lock
   if (!txState.acquiredLocks.has(absolutePath)) {
-    const createdResource = await lockManager.acquireExclusiveLock(absolutePath);
+    const createdResource =
+      await lockManager.acquireExclusiveLock(absolutePath);
     txState.acquiredLocks.add(absolutePath);
     if (createdResource) {
       txState.temporaryResources.add(createdResource);
@@ -62,7 +63,7 @@ export async function appendFile(
 
   // Journaling
   const existingOpIndex = txState.journal.operations.findIndex(
-    op => op.op === 'WRITE' && op.path === relativePath
+    (op) => op.op === 'WRITE' && op.path === relativePath,
   );
   if (existingOpIndex === -1) {
     txState.journal.operations.push({ op: 'WRITE', path: relativePath });

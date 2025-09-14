@@ -11,7 +11,9 @@ import { AppContext, TxState } from '../types';
  * @param appContext Application context containing managers
  * @returns Promise that resolves to the transaction state
  */
-export async function beginTransaction(appContext: AppContext): Promise<TxState> {
+export async function beginTransaction(
+  appContext: AppContext,
+): Promise<TxState> {
   const { txDir, journalManager } = appContext;
   const txId = randomUUID();
 
@@ -30,7 +32,7 @@ export async function beginTransaction(appContext: AppContext): Promise<TxState>
 
   // Create staging directory
   await fs.mkdir(txState.stagingDir, { recursive: true });
-  
+
   // Write journal in initial state
   await journalManager.write(txState.journal);
 
@@ -43,9 +45,12 @@ export async function beginTransaction(appContext: AppContext): Promise<TxState>
  * @param appContext Application context containing managers
  * @param txState Transaction state to commit
  */
-export async function commitTransaction(appContext: AppContext, txState: TxState): Promise<void> {
+export async function commitTransaction(
+  appContext: AppContext,
+  txState: TxState,
+): Promise<void> {
   const { baseDir, journalManager } = appContext;
-  
+
   // --- Phase 1: Prepare ---
   txState.journal.status = 'PREPARED';
   // Update journal with synchronous write for crash safety
@@ -61,9 +66,9 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
         case 'WRITE': {
           const dest = finalDestPath(op.path);
           const source = sourceStagingPath(op.path);
-          
+
           // Verify staging file exists before attempting rename
-          // Use retry logic for Windows file system timing issues  
+          // Use retry logic for Windows file system timing issues
           for (let attempt = 1; attempt <= 5; attempt++) {
             try {
               await fs.access(source);
@@ -71,22 +76,30 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
             } catch (e: any) {
               if (e.code === 'ENOENT' && attempt < 5) {
                 // Wait progressively longer for file system to settle (Windows timing issue)
-                await new Promise(resolve => setTimeout(resolve, 50 * Math.pow(2, attempt - 1)));
+                await new Promise((resolve) =>
+                  setTimeout(resolve, 50 * Math.pow(2, attempt - 1)),
+                );
                 continue;
               }
               if (e.code === 'ENOENT') {
                 // Add more detailed error information for debugging
                 try {
-                  const stagingDirContents = await fs.readdir(txState.stagingDir);
-                  throw new Error(`Staging file not found for commit: ${op.path}. Staging dir contains: [${stagingDirContents.join(', ')}]. This indicates a bug in the staging logic or filesystem timing issue.`);
+                  const stagingDirContents = await fs.readdir(
+                    txState.stagingDir,
+                  );
+                  throw new Error(
+                    `Staging file not found for commit: ${op.path}. Staging dir contains: [${stagingDirContents.join(', ')}]. This indicates a bug in the staging logic or filesystem timing issue.`,
+                  );
                 } catch (dirError) {
-                  throw new Error(`Staging file not found for commit: ${op.path}. Could not read staging directory: ${dirError}. This indicates a bug in the staging logic or filesystem timing issue.`);
+                  throw new Error(
+                    `Staging file not found for commit: ${op.path}. Could not read staging directory: ${dirError}. This indicates a bug in the staging logic or filesystem timing issue.`,
+                  );
                 }
               }
               throw e;
             }
           }
-          
+
           // Create parent directory in case it doesn't exist
           await fs.mkdir(path.dirname(dest), { recursive: true });
           // Use copy+remove instead of rename to handle Windows EPERM issues
@@ -125,17 +138,19 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
           const stagingToPath = sourceStagingPath(op.to);
           const finalToPath = finalDestPath(op.to);
           const finalFromPath = finalDestPath(op.from);
-          
+
           // Verify staging file exists
           try {
             await fs.access(stagingToPath);
           } catch (e: any) {
             if (e.code === 'ENOENT') {
-              throw new Error(`Staging file not found for rename commit: ${op.to}. This indicates a bug in the staging logic.`);
+              throw new Error(
+                `Staging file not found for rename commit: ${op.to}. This indicates a bug in the staging logic.`,
+              );
             }
             throw e;
           }
-          
+
           await fs.mkdir(path.dirname(finalToPath), { recursive: true });
           // Use copy+remove instead of rename to handle Windows EPERM issues
           try {
@@ -164,17 +179,19 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
           // For copy, we move from staging to destination
           const stagingToPath = sourceStagingPath(op.to);
           const finalToPath = finalDestPath(op.to);
-          
+
           // Verify staging file exists
           try {
             await fs.access(stagingToPath);
           } catch (e: any) {
             if (e.code === 'ENOENT') {
-              throw new Error(`Staging file not found for copy commit: ${op.to}. This indicates a bug in the staging logic.`);
+              throw new Error(
+                `Staging file not found for copy commit: ${op.to}. This indicates a bug in the staging logic.`,
+              );
             }
             throw e;
           }
-          
+
           await fs.mkdir(path.dirname(finalToPath), { recursive: true });
           // Always use copy for CP operations to avoid interfering with other staging files
           // The staging cleanup happens later in the cleanup phase
@@ -188,14 +205,14 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
     // Here we just log the error
     console.error(
       `FATAL: Failed to execute commit for txId "${txState.id}" after PREPARED state. ` +
-      `Manual recovery may be needed.`,
-      executeError
+        `Manual recovery may be needed.`,
+      executeError,
     );
     // Terminating the process might be the safest option in some cases
     // process.exit(1);
     throw executeError; // Re-throw for now
   }
-  
+
   // --- Cleanup ---
   await cleanup(appContext, txState, 'COMMITTED');
 }
@@ -206,7 +223,10 @@ export async function commitTransaction(appContext: AppContext, txState: TxState
  * @param appContext Application context containing managers
  * @param txState Transaction state to rollback
  */
-export async function rollbackTransaction(appContext: AppContext, txState: TxState): Promise<void> {
+export async function rollbackTransaction(
+  appContext: AppContext,
+  txState: TxState,
+): Promise<void> {
   // Restore snapshots for operations that may have overwritten existing files
   await restoreSnapshots(appContext, txState);
 
@@ -214,7 +234,7 @@ export async function rollbackTransaction(appContext: AppContext, txState: TxSta
   for (const resourcePath of txState.temporaryResources) {
     try {
       await fs.rm(resourcePath, { recursive: true, force: true });
-    } catch (e) {
+    } catch {
       // Ignore deletion failures (may already be deleted)
     }
   }
@@ -227,13 +247,18 @@ export async function rollbackTransaction(appContext: AppContext, txState: TxSta
  * @param appContext Application context containing managers
  * @param txState Transaction state containing snapshots
  */
-async function restoreSnapshots(appContext: AppContext, txState: TxState): Promise<void> {
+async function restoreSnapshots(
+  appContext: AppContext,
+  txState: TxState,
+): Promise<void> {
   const { baseDir } = appContext;
-  
-  for (const [relativePath, snapshotPath] of Object.entries(txState.journal.snapshots)) {
+
+  for (const [relativePath, snapshotPath] of Object.entries(
+    txState.journal.snapshots,
+  )) {
     try {
       const originalPath = path.join(baseDir, relativePath);
-      
+
       // Check if snapshot exists
       try {
         await fs.access(snapshotPath);
@@ -244,11 +269,11 @@ async function restoreSnapshots(appContext: AppContext, txState: TxState): Promi
         }
         throw e;
       }
-      
+
       // Restore the snapshot to the original location
       await fs.mkdir(path.dirname(originalPath), { recursive: true });
       await fs.cp(snapshotPath, originalPath, { recursive: true });
-      
+
       console.log(`Restored snapshot: ${relativePath}`);
     } catch (error) {
       console.error(`Failed to restore snapshot for ${relativePath}:`, error);
@@ -266,13 +291,13 @@ async function restoreSnapshots(appContext: AppContext, txState: TxState): Promi
 async function cleanup(
   appContext: AppContext,
   txState: TxState,
-  finalStatus: 'COMMITTED' | 'ROLLED_BACK'
+  finalStatus: 'COMMITTED' | 'ROLLED_BACK',
 ): Promise<void> {
   const { journalManager, lockManager } = appContext;
 
   // 1. Release all locks
   await lockManager.releaseAll(txState.acquiredLocks);
-  
+
   // 2. Remove staging directory
   await fs.rm(txState.stagingDir, { recursive: true, force: true });
 

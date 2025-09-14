@@ -13,8 +13,10 @@ export async function rm(
   appContext: AppContext,
   txState: TxState,
   targetPath: string,
-  _options?: { recursive?: boolean }
+  _options?: { recursive?: boolean },
 ): Promise<void> {
+  // Suppress unused parameter warning
+  void _options;
   const { baseDir, lockManager, journalManager } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, targetPath);
   const relativePath = path.relative(baseDir, absolutePath);
@@ -31,7 +33,7 @@ export async function rm(
 
   // Journaling (actual deletion happens at commit time)
   const existingOpIndex = txState.journal.operations.findIndex(
-    op => op.op === 'RM' && op.path === relativePath
+    (op) => op.op === 'RM' && op.path === relativePath,
   );
   if (existingOpIndex === -1) {
     txState.journal.operations.push({ op: 'RM', path: relativePath });

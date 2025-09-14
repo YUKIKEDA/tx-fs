@@ -15,7 +15,7 @@ export async function readFile(
   appContext: AppContext,
   txState: TxState,
   filePath: string,
-  encoding?: BufferEncoding
+  encoding?: BufferEncoding,
 ): Promise<string | Buffer> {
   const { baseDir, lockManager } = appContext;
   const absolutePath = resolveAndVerifyPath(baseDir, filePath);
@@ -34,11 +34,15 @@ export async function readFile(
   const stagingPath = path.join(txState.stagingDir, relativePath);
   try {
     await fs.access(stagingPath);
-    return encoding ? fs.readFile(stagingPath, encoding) : fs.readFile(stagingPath);
+    return encoding
+      ? fs.readFile(stagingPath, encoding)
+      : fs.readFile(stagingPath);
   } catch (e: any) {
     if (e.code === 'ENOENT') {
       // Read from actual file if not in staging
-      return encoding ? fs.readFile(absolutePath, encoding) : fs.readFile(absolutePath);
+      return encoding
+        ? fs.readFile(absolutePath, encoding)
+        : fs.readFile(absolutePath);
     }
     throw e;
   }
